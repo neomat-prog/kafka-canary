@@ -1,4 +1,4 @@
-<img src="assets/80f45898-897e-43b8-a563-9a0b7839ed1a.png" alt="Gopher" width="200" align="right" />
+<img src="assets/0d09e8b7-7907-4f4c-b7ad-45672fc1e78c.png" alt="Gopher" width="400" align="right" />
 
 # kafka-canary
 
