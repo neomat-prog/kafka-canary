@@ -3,7 +3,10 @@ package main
 import (
 	"log"
 
+	message "github.com/neomat-prog/kafka-canary/internal"
+
 	"github.com/IBM/sarama"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -17,10 +20,14 @@ func main() {
 	}
 	defer producer.Close()
 
+	probe := message.New(uuid.NewString())
+	b, _ := probe.Encode()
+	topic := "__strimzi_canary"
+
 	// change topic name
 	msg := &sarama.ProducerMessage{
-		Topic: "__strimzi_canary",
-		Value: sarama.StringEncoder("hello canary"),
+		Topic: topic,
+		Value: sarama.ByteEncoder(b),
 	}
 
 	partition, offset, err := producer.SendMessage(msg)
