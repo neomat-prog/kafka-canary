@@ -59,7 +59,7 @@ func (p *Producer) send() error {
 		Value: sarama.ByteEncoder(b),
 	})
 	if err != nil {
-		return nil
+		return fmt.Errorf("send: %w", err)
 	}
 	log.Printf("produced id=%s partition=%d offset=%d", id, partition, offset)
 	return nil
