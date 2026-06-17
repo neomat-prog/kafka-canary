@@ -1,4 +1,4 @@
-package internal
+package message
 
 import (
 	"testing"
@@ -12,6 +12,9 @@ func TestProbeRoundTrip(t *testing.T) {
 		t.Fatalf("encode: %v", err)
 	}
 	out, err := Decode(b)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 	if out.ID != in.ID {
 		t.Errorf("id: got %q want %q", out.ID, in.ID)
 	}

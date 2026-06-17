@@ -1,9 +1,11 @@
 build:
-# change from /fs to maybe dfs
-	@go build -o bin/fs
+	@go build -o bin/canary ./cmd/consume
 
 run: build
-	@./bin/fs
+	@./bin/canary
+
+consume:
+	@go run ./cmd/consume
 
 test:
-	@go test ./... -v 
+	@go test ./... && go vet ./...

@@ -3,10 +3,9 @@ package main
 import (
 	"log"
 
-	message "github.com/neomat-prog/kafka-canary/internal"
-
 	"github.com/IBM/sarama"
 	"github.com/google/uuid"
+	"github.com/neomat-prog/kafka-canary/internal/message"
 )
 
 func main() {
