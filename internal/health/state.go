@@ -16,7 +16,7 @@ func New() *State {
 	return &State{}
 }
 
-func (s *State) RecordConsumer(latency time.Duration) {
+func (s *State) RecordConsume(latency time.Duration) {
 	s.lastConsumedNanos.Store(time.Now().UnixNano())
 	s.lastLatencyNanos.Store(int64(latency))
 }

@@ -65,6 +65,6 @@ func (h handler) process(value []byte) error {
 	if err != nil {
 		return err
 	}
-	h.state.RecordConsumer(probe.Latency())
+	h.state.RecordConsume(probe.Latency())
 	return nil
 }
