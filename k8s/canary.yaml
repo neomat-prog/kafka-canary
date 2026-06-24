@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: kafka-canary }
+  template:
+    metadata:
+      labels: { app: kafka-canary }
+    spec:
+      containers:
+        - name: canary
+          image: kafka-canary:k8s
+          imagePullPolicy: IfNotPresent 
+          ports:
+            - containerPort: 8080
+          env:
+            - { name: CANARY_BROKERS, value: "kafka:9092" }
+            - { name: CANARY_TOPIC, value: "__strimzi_canary" }
+            - { name: CANARY_PRODUCE_INTERVAL, value: "5s" }
+          livenessProbe:
+            httpGet: { path: /healthy, port: 8080 }
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /ready, port: 8080 }
+            periodSeconds: 10
+            failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-canary
+spec:
+  selector: { app: kafka-canary }
+  ports:
+    - { port: 8080, targetPort: 8080 }

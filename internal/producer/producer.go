@@ -30,8 +30,8 @@ func (p *Producer) connect() (sarama.SyncProducer, error) {
 	return sarama.NewSyncProducer(p.brokers, cfg)
 }
 
-// Run sends one probe per interval. Kafka errors are logged, not fatal — a
-// down broker means the next tick retries (re)connect, so the process stays up.
+// Run sends one probe per interval. Kafka errors are logged, not fatal,
+// a down broker means the next tick retries (re)connect, so the process stays up.
 func (p *Producer) Run(ctx context.Context) error {
 	defer func() {
 		if p.sync != nil {

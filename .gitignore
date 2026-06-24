@@ -1,0 +1,11 @@
+# build output
+/bin/
+
+# go
+*.test
+*.out
+coverage.*
+
+# env / secrets
+.env
+*.local
