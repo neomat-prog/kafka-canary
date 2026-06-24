@@ -31,7 +31,10 @@ func New(addr string, state *health.State, staleAfter time.Duration, log *slog.L
 }
 
 func (s *Server) handleHealthy(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status":"ok"}` + `\n`))
+
 }
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
