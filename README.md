@@ -55,3 +55,7 @@ go run ./cmd/canary          # local, against $CANARY_BROKERS
 docker compose up --build    # Kafka + canary together
 kubectl apply -f k8s/canary.yaml   # on Kubernetes (set CANARY_BROKERS first)
 ```
+
+## License
+
+[MIT](LICENSE)
