@@ -2,8 +2,8 @@ package consumer
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/neomat-prog/kafka-canary/internal/health"
@@ -11,33 +11,61 @@ import (
 )
 
 type Consumer struct {
-	group sarama.ConsumerGroup
-	topic string
-	state *health.State
-	log   *slog.Logger
+	brokers []string
+	groupID string
+	topic   string
+	state   *health.State
+	log     *slog.Logger
+	group   sarama.ConsumerGroup // nil until first successful connect
 }
 
-func New(brokers []string, groupID, topic string, state *health.State, log *slog.Logger) (*Consumer, error) {
+func New(brokers []string, groupID, topic string, state *health.State, log *slog.Logger) *Consumer {
+	return &Consumer{brokers: brokers, groupID: groupID, topic: topic, state: state, log: log}
+}
+
+func (c *Consumer) connect() (sarama.ConsumerGroup, error) {
 	cfg := sarama.NewConfig()
 	cfg.Consumer.Offsets.Initial = sarama.OffsetNewest
-
-	group, err := sarama.NewConsumerGroup(brokers, groupID, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("new consumer group: %w", err)
-	}
-	return &Consumer{group: group, topic: topic, state: state, log: log}, nil
+	return sarama.NewConsumerGroup(c.brokers, c.groupID, cfg)
 }
 
 func (c *Consumer) Run(ctx context.Context) error {
-	defer c.group.Close()
+	defer func() {
+		if c.group != nil {
+			c.group.Close()
+		}
+	}()
 	h := handler{state: c.state, log: c.log}
 	for {
-		if err := c.group.Consume(ctx, []string{c.topic}, h); err != nil {
-			return fmt.Errorf("consume: %w", err)
-		}
 		if ctx.Err() != nil {
 			return nil
 		}
+		if c.group == nil {
+			g, err := c.connect()
+			if err != nil {
+				c.log.Warn("consumer connect failed, retrying", "err", err)
+				if sleep(ctx, 2*time.Second) {
+					return nil // ctx cancelled during backoff
+				}
+				continue
+			}
+			c.group = g
+		}
+		if err := c.group.Consume(ctx, []string{c.topic}, h); err != nil {
+			c.log.Warn("consume error, reconnecting", "err", err)
+			c.group.Close()
+			c.group = nil // force reconnect next loop
+			sleep(ctx, 2*time.Second)
+		}
+	}
+}
+
+func sleep(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return true
+	case <-time.After(d):
+		return false
 	}
 }
 

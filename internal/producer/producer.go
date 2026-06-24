@@ -3,7 +3,7 @@ package producer
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -12,43 +12,57 @@ import (
 )
 
 type Producer struct {
-	sync     sarama.SyncProducer
+	brokers  []string
 	topic    string
 	interval time.Duration
+	log      *slog.Logger
+	sync     sarama.SyncProducer // nil until first successful connect
 }
 
-func New(brokers []string, topic string, interval time.Duration) (*Producer, error) {
+func New(brokers []string, topic string, interval time.Duration, log *slog.Logger) *Producer {
+	return &Producer{brokers: brokers, topic: topic, interval: interval, log: log}
+}
+
+func (p *Producer) connect() (sarama.SyncProducer, error) {
 	cfg := sarama.NewConfig()
 	cfg.Producer.Return.Successes = true
 	cfg.Producer.RequiredAcks = sarama.WaitForAll
-
-	sp, err := sarama.NewSyncProducer(brokers, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("new sync producer: %w", err)
-	}
-	return &Producer{sync: sp, topic: topic, interval: interval}, nil
+	return sarama.NewSyncProducer(p.brokers, cfg)
 }
 
-// Run every probe
+// Run sends one probe per interval. Kafka errors are logged, not fatal — a
+// down broker means the next tick retries (re)connect, so the process stays up.
 func (p *Producer) Run(ctx context.Context) error {
-	defer p.sync.Close()
+	defer func() {
+		if p.sync != nil {
+			p.sync.Close()
+		}
+	}()
+
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
 
-	tickCh := ticker.C
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-tickCh:
+		case <-ticker.C:
 			if err := p.send(); err != nil {
-				log.Printf("produce error: %v", err)
+				p.log.Warn("produce failed", "err", err)
 			}
 		}
 	}
 }
 
 func (p *Producer) send() error {
+	if p.sync == nil { // (re)connect on demand
+		sp, err := p.connect()
+		if err != nil {
+			return fmt.Errorf("connect: %w", err)
+		}
+		p.sync = sp
+	}
+
 	id := strconv.FormatInt(time.Now().UnixNano(), 10)
 	b, err := message.New(id).Encode()
 	if err != nil {
@@ -59,8 +73,10 @@ func (p *Producer) send() error {
 		Value: sarama.ByteEncoder(b),
 	})
 	if err != nil {
+		p.sync.Close()
+		p.sync = nil // drop dead client, reconnect next tick
 		return fmt.Errorf("send: %w", err)
 	}
-	log.Printf("produced id=%s partition=%d offset=%d", id, partition, offset)
+	p.log.Info("produced", "id", id, "partition", partition, "offset", offset)
 	return nil
 }
