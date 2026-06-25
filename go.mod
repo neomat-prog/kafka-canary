@@ -5,6 +5,7 @@ go 1.26.2
 require (
 	github.com/IBM/sarama v1.50.3
 	golang.org/x/sync v0.21.0
+	software.sslmate.com/src/go-pkcs12 v0.7.3
 )
 
 require (

@@ -15,17 +15,31 @@ type Config struct {
 	Interval   time.Duration
 	Addr       string
 	StaleAfter time.Duration
+
+	CACertPath     string // truststore .p12 (ca.p12)
+	ClientCertPath string // keystore .p12 (user.p12)
+	ClientKeyPath  string // unused with PKCS12; kept for PEM fallback
+
+	TruststorePassword string
+	KeystorePassword   string
 }
 
 func Load() (Config, error) {
 	c := Config{
-		//TODO: check whether this localhost is correct
 		Brokers:  splitCSV(env("CANARY_BROKERS", "localhost:9092")),
 		Topic:    env("CANARY_TOPIC", "__strimzi_canary"),
 		Group:    env("CANARY_CONSUMER_GROUP", "canary-group"),
 		Interval: dur("CANARY_PRODUCE_INTERVAL", 5*time.Second),
 		Addr:     env("CANARY_METRICS_ADDR", ":8080"),
+
+		CACertPath:     env("CANARY_CA_CERT", ""),
+		ClientCertPath: env("CANARY_CLIENT_CERT", ""),
+		ClientKeyPath:  env("CANARY_CLIENT_KEY", ""),
+
+		TruststorePassword: env("CANARY_TRUSTSTORE_PASSWORD", ""),
+		KeystorePassword:   env("CANARY_KEYSTORE_PASSWORD", ""),
 	}
+
 	if len(c.Brokers) == 0 {
 		return Config{}, fmt.Errorf("CANARY_BROKERS is empty")
 	}

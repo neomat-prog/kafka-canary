@@ -2,6 +2,7 @@ package producer
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -15,18 +16,23 @@ type Producer struct {
 	brokers  []string
 	topic    string
 	interval time.Duration
+	tls      *tls.Config
 	log      *slog.Logger
-	sync     sarama.SyncProducer // nil until first successful connect
+	sync     sarama.SyncProducer
 }
 
-func New(brokers []string, topic string, interval time.Duration, log *slog.Logger) *Producer {
-	return &Producer{brokers: brokers, topic: topic, interval: interval, log: log}
+func New(brokers []string, topic string, interval time.Duration, tlsCfg *tls.Config, log *slog.Logger) *Producer {
+	return &Producer{brokers: brokers, topic: topic, interval: interval, tls: tlsCfg, log: log}
 }
 
 func (p *Producer) connect() (sarama.SyncProducer, error) {
 	cfg := sarama.NewConfig()
 	cfg.Producer.Return.Successes = true
 	cfg.Producer.RequiredAcks = sarama.WaitForAll
+	if p.tls != nil {
+		cfg.Net.TLS.Enable = true
+		cfg.Net.TLS.Config = p.tls
+	}
 	return sarama.NewSyncProducer(p.brokers, cfg)
 }
 

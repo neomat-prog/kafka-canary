@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"time"
 
@@ -14,18 +15,23 @@ type Consumer struct {
 	brokers []string
 	groupID string
 	topic   string
+	tls     *tls.Config
 	state   *health.State
 	log     *slog.Logger
-	group   sarama.ConsumerGroup // nil until first successful connect
+	group   sarama.ConsumerGroup
 }
 
-func New(brokers []string, groupID, topic string, state *health.State, log *slog.Logger) *Consumer {
-	return &Consumer{brokers: brokers, groupID: groupID, topic: topic, state: state, log: log}
+func New(brokers []string, groupID, topic string, tlsCfg *tls.Config, state *health.State, log *slog.Logger) *Consumer {
+	return &Consumer{brokers: brokers, groupID: groupID, topic: topic, tls: tlsCfg, state: state, log: log}
 }
 
 func (c *Consumer) connect() (sarama.ConsumerGroup, error) {
 	cfg := sarama.NewConfig()
 	cfg.Consumer.Offsets.Initial = sarama.OffsetNewest
+	if c.tls != nil {
+		cfg.Net.TLS.Enable = true
+		cfg.Net.TLS.Config = c.tls
+	}
 	return sarama.NewConsumerGroup(c.brokers, c.groupID, cfg)
 }
 

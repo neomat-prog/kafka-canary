@@ -34,13 +34,20 @@ func run(log *slog.Logger) error {
 		"brokers", cfg.Brokers, "topic", cfg.Topic,
 		"interval", cfg.Interval, "addr", cfg.Addr)
 
+	tlsCfg, err := config.BuildTLSConfig(cfg)
+	if err != nil {
+		return err
+	}
+	if tlsCfg != nil {
+		log.Info("mTLS enabled", "ca", cfg.CACertPath, "cert", cfg.ClientCertPath)
+	}
+
 	state := health.New()
 
-	prod := producer.New(cfg.Brokers, cfg.Topic, cfg.Interval, log)
-	cons := consumer.New(cfg.Brokers, cfg.Group, cfg.Topic, state, log)
+	prod := producer.New(cfg.Brokers, cfg.Topic, cfg.Interval, tlsCfg, log)
+	cons := consumer.New(cfg.Brokers, cfg.Group, cfg.Topic, tlsCfg, state, log)
 	srv := server.New(cfg.Addr, state, cfg.StaleAfter, log)
 
-	// SIGTERM (k8s) / SIGINT (ctrl-c) → ctx cancel → all Run(ctx) unwind.
 	ctx, stop := signal.NotifyContext(context.Background(),
 		os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -51,5 +58,5 @@ func run(log *slog.Logger) error {
 	g.Go(func() error { return srv.Run(ctx) })
 
 	log.Info("canary running")
-	return g.Wait() // blocks until ctx cancelled or any Run errors
+	return g.Wait()
 }
