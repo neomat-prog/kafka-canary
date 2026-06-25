@@ -48,6 +48,23 @@ over being clever.
 | `CANARY_PRODUCE_INTERVAL` | `5s` | how often to send a probe |
 | `CANARY_METRICS_ADDR` | `:8080` | HTTP listen address |
 
+## How does it work?
+
+```mermaid
+flowchart TD
+    config["<b>CONFIG</b><br/>reads CANARY_BROKERS, CANARY_TOPIC,<br/>CANARY_PRODUCE_INTERVAL and CERTS from env"]
+    producer["<b>PRODUCER</b><br/>stamps producedAt, encodes,<br/>sends probe every interval"]
+    kafka["<b>KAFKA</b><br/>stores the probe,<br/>hands it back on read"]
+    consumer["<b>CONSUMER</b><br/>decodes probe, computes<br/>latency = now − producedAt"]
+    state["<b>HEALTH STATE</b><br/>{ lastConsumedAt, lastLatency }"]
+    server["<b>SERVER</b><br/>/ready, /status read the state<br/>flowing = now − lastConsumedAt &lt; staleAfter"]
+    kubelet["<b>KUBELET</b><br/>GETs /ready every 10s<br/>200 flowing · 503 stalled"]
+
+    config --> producer --> kafka --> consumer --> state --> server --> kubelet
+
+    linkStyle default stroke-width:2px
+```
+
 ## Run
 
 ```bash
