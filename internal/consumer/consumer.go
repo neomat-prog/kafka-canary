@@ -12,17 +12,18 @@ import (
 )
 
 type Consumer struct {
-	brokers []string
-	groupID string
-	topic   string
-	tls     *tls.Config
-	state   *health.State
-	log     *slog.Logger
-	group   sarama.ConsumerGroup
+	brokers      []string
+	groupID      string
+	topic        string
+	tls          *tls.Config
+	state        *health.State
+	log          *slog.Logger
+	group        sarama.ConsumerGroup
+	latThreshold time.Duration
 }
 
-func New(brokers []string, groupID, topic string, tlsCfg *tls.Config, state *health.State, log *slog.Logger) *Consumer {
-	return &Consumer{brokers: brokers, groupID: groupID, topic: topic, tls: tlsCfg, state: state, log: log}
+func New(brokers []string, groupID, topic string, tlsCfg *tls.Config, latThreshold time.Duration, state *health.State, log *slog.Logger) *Consumer {
+	return &Consumer{brokers: brokers, groupID: groupID, topic: topic, tls: tlsCfg, latThreshold: latThreshold, state: state, log: log}
 }
 
 func (c *Consumer) connect() (sarama.ConsumerGroup, error) {
@@ -41,7 +42,9 @@ func (c *Consumer) Run(ctx context.Context) error {
 			c.group.Close()
 		}
 	}()
-	h := handler{state: c.state, log: c.log}
+
+	h := &handler{state: c.state, log: c.log, latThreshold: c.latThreshold}
+
 	for {
 		if ctx.Err() != nil {
 			return nil
@@ -76,29 +79,44 @@ func sleep(ctx context.Context, d time.Duration) bool {
 }
 
 type handler struct {
-	state *health.State
-	log   *slog.Logger
+	state        *health.State
+	log          *slog.Logger
+	latThreshold time.Duration
+	lastSeq      int64
 }
 
-func (handler) Setup(sarama.ConsumerGroupSession) error   { return nil }
-func (handler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
+func (h *handler) Setup(sarama.ConsumerGroupSession) error   { return nil }
+func (h *handler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
-func (h handler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+func (h *handler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	msgCh := claim.Messages()
 	for msg := range msgCh {
-		if err := h.process(msg.Value); err != nil {
+		lat, err := h.process(msg.Value)
+		if err != nil {
 			h.log.Warn("bad payload", "err", err)
+		} else {
+			h.state.RecordConsume(lat)
 		}
 		sess.MarkMessage(msg, "")
 	}
 	return nil
 }
 
-func (h handler) process(value []byte) error {
-	probe, err := message.Decode(value)
+func (h *handler) process(value []byte) (latency time.Duration, err error) {
+	msg, err := message.Decode(value)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	h.state.RecordConsume(probe.Latency())
-	return nil
+	latency = msg.Latency()
+
+	if latency > h.latThreshold {
+		h.log.Warn("latency spike", "latency", latency, "id", msg.ID)
+	}
+
+	if h.lastSeq != 0 && msg.Seq > h.lastSeq+1 {
+		h.log.Warn("probe gap", "missing", msg.Seq-h.lastSeq-1, "from", h.lastSeq)
+	}
+	h.lastSeq = msg.Seq
+
+	return latency, nil
 }

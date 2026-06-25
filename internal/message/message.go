@@ -8,7 +8,8 @@ import (
 // Probe = canary payload
 type Probe struct {
 	ID         string `json:"id"`
-	ProducedAt int64  `json:"producedAt"` // unix nanoseconds
+	Seq        int64  `json:"seq"`
+	ProducedAt int64  `json:"producedAt"`
 }
 
 func New(id string) Probe {

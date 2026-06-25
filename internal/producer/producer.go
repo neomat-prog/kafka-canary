@@ -61,6 +61,7 @@ func (p *Producer) Run(ctx context.Context) error {
 }
 
 func (p *Producer) send() error {
+	// here we reconnect whenever something goes down right?
 	if p.sync == nil { // (re)connect on demand
 		sp, err := p.connect()
 		if err != nil {
