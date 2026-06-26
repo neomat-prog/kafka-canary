@@ -11,6 +11,7 @@
 delivering messages — by sending a probe, reading it back, and reporting the
 result over HTTP.</p>
 
+
 ## What it is
 
 A health check, not a metrics system. It runs a loop:
@@ -64,6 +65,10 @@ flowchart TD
 
     linkStyle default stroke-width:2px
 ```
+## Why was this created?
+
+<p>This project was built in collaboration with the DevOps team to support their monitoring workflows. The team needed a way to verify their Kafka cluster's health during outages, but the officially supported Strimzi Canary tool had been archived, and no reputable alternative was available. To fill that gap, we built this service in Go, based on the archived Strimzi Canary project.</p>
+
 
 ## Run
 
