@@ -19,6 +19,7 @@ type Producer struct {
 	tls      *tls.Config
 	log      *slog.Logger
 	sync     sarama.SyncProducer
+	seq      int64
 }
 
 func New(brokers []string, topic string, interval time.Duration, tlsCfg *tls.Config, log *slog.Logger) *Producer {
@@ -70,8 +71,12 @@ func (p *Producer) send() error {
 		p.sync = sp
 	}
 
+	p.seq++
+
 	id := strconv.FormatInt(time.Now().UnixNano(), 10)
-	b, err := message.New(id).Encode()
+	msg := message.New(id)
+	msg.Seq = p.seq
+	b, err := msg.Encode()
 	if err != nil {
 		return err
 	}
