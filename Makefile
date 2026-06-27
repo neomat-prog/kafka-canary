@@ -1,5 +1,5 @@
 build:
-	@go build -o bin/canary ./cmd/consume
+	@go build -o bin/canary ./cmd/canary/
 
 run: build
 	@./bin/canary
