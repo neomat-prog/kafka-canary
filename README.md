@@ -1,5 +1,5 @@
 <img
-  src="assets/0d09e8b7-7907-4f4c-b7ad-45672fc1e78c.png"
+  src="assets/kafka-gopher.png"
   alt="Gopher"
   width="400"
   align="right"
