@@ -3,12 +3,15 @@ package producer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/neomat-prog/kafka-canary/internal/message"
+	"golang.org/x/sync/errgroup"
 )
 
 type Producer struct {
@@ -99,7 +102,9 @@ func (p *Producer) sendOne(part int32) error {
 	if err != nil {
 		return fmt.Errorf("send part %d: %w", part, err)
 	}
+
 	p.log.Info("produced", "id", id, "partition", part, "offset", offset)
+
 	return nil
 }
 
@@ -115,15 +120,24 @@ func (p *Producer) send() error {
 		return fmt.Errorf("partitions: %w", err)
 	}
 
-	var firstErr error
+	var (
+		mu   sync.Mutex
+		g    errgroup.Group
+		errs []error
+	)
+	g.SetLimit(16)
+
 	for _, part := range parts {
-		if err := p.sendOne(part); err != nil {
-			p.log.Warn("probe failed", "partition", part, "err", err)
-			if firstErr == nil {
-				firstErr = err
+		g.Go(func() error {
+			if err := p.sendOne(part); err != nil {
+				p.log.Warn("partition probe failed", "partition", part, "err", err)
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
 			}
-			continue
-		}
+			return nil
+		})
 	}
-	return firstErr
+	g.Wait()
+	return errors.Join(errs...)
 }
