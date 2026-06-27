@@ -22,6 +22,7 @@ type Producer struct {
 	log      *slog.Logger
 	client   sarama.Client
 	sync     sarama.SyncProducer
+	seq      int64
 }
 
 func New(brokers []string, topic string, interval time.Duration, tlsCfg *tls.Config, log *slog.Logger) *Producer {

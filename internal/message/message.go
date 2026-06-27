@@ -13,7 +13,7 @@ type Probe struct {
 }
 
 func New(id string) Probe {
-	return Probe{ID: id, ProducedAt: time.Now().UnixNano()}
+	return Probe{ID: id, Seq: 0, ProducedAt: time.Now().UnixNano()}
 }
 
 func (p Probe) Encode() ([]byte, error) {
