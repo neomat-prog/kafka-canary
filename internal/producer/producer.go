@@ -18,6 +18,7 @@ type Producer struct {
 	interval time.Duration
 	tls      *tls.Config
 	log      *slog.Logger
+	client   sarama.Client
 	sync     sarama.SyncProducer
 }
 
@@ -25,15 +26,26 @@ func New(brokers []string, topic string, interval time.Duration, tlsCfg *tls.Con
 	return &Producer{brokers: brokers, topic: topic, interval: interval, tls: tlsCfg, log: log}
 }
 
-func (p *Producer) connect() (sarama.SyncProducer, error) {
+func (p *Producer) connect() error {
 	cfg := sarama.NewConfig()
 	cfg.Producer.Return.Successes = true
 	cfg.Producer.RequiredAcks = sarama.WaitForAll
+	cfg.Producer.Partitioner = sarama.NewManualPartitioner
 	if p.tls != nil {
 		cfg.Net.TLS.Enable = true
 		cfg.Net.TLS.Config = p.tls
 	}
-	return sarama.NewSyncProducer(p.brokers, cfg)
+	client, err := sarama.NewClient(p.brokers, cfg)
+	if err != nil {
+		return err
+	}
+	sp, err := sarama.NewSyncProducerFromClient(client)
+	if err != nil {
+		client.Close()
+		return err
+	}
+	p.client, p.sync = client, sp
+	return nil
 }
 
 // Run sends one probe per interval. Kafka errors are logged, not fatal,
@@ -60,30 +72,48 @@ func (p *Producer) Run(ctx context.Context) error {
 	}
 }
 
+func (p *Producer) partitions() ([]int32, error) {
+	return p.client.Partitions(p.topic)
+}
+
+func (p *Producer) drop() {
+	if p.sync != nil {
+		p.sync.Close()
+	}
+	if p.client != nil {
+		p.client.Close()
+	}
+	p.sync, p.client = nil, nil
+}
+
 func (p *Producer) send() error {
-	// here we reconnect whenever something goes down right?
-	if p.sync == nil { // (re)connect on demand
-		sp, err := p.connect()
-		if err != nil {
+	if p.sync == nil {
+		if err := p.connect(); err != nil {
 			return fmt.Errorf("connect: %w", err)
 		}
-		p.sync = sp
+	}
+	parts, err := p.partitions()
+	if err != nil {
+		p.drop()
+		return fmt.Errorf("partitions: %w", err)
 	}
 
-	id := strconv.FormatInt(time.Now().UnixNano(), 10)
-	b, err := message.New(id).Encode()
-	if err != nil {
-		return err
+	for _, part := range parts {
+		id := strconv.FormatInt(time.Now().UnixNano(), 10)
+		b, err := message.New(id).Encode()
+		if err != nil {
+			return err
+		}
+		_, offset, err := p.sync.SendMessage(&sarama.ProducerMessage{
+			Topic:     p.topic,
+			Partition: part,
+			Value:     sarama.ByteEncoder(b),
+		})
+		if err != nil {
+			p.drop()
+			return fmt.Errorf("send part %d: %w", part, err)
+		}
+		p.log.Info("produced", "id", id, "partition", part, "offset", offset)
 	}
-	partition, offset, err := p.sync.SendMessage(&sarama.ProducerMessage{
-		Topic: p.topic,
-		Value: sarama.ByteEncoder(b),
-	})
-	if err != nil {
-		p.sync.Close()
-		p.sync = nil // drop dead client, reconnect next tick
-		return fmt.Errorf("send: %w", err)
-	}
-	p.log.Info("produced", "id", id, "partition", partition, "offset", offset)
 	return nil
 }
