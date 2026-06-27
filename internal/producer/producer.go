@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -86,6 +85,24 @@ func (p *Producer) drop() {
 	p.sync, p.client = nil, nil
 }
 
+func (p *Producer) sendOne(part int32) error {
+	id := fmt.Sprintf("%d-%d", part, time.Now().UnixNano())
+	b, err := message.New(id).Encode()
+	if err != nil {
+		return err
+	}
+	_, offset, err := p.sync.SendMessage(&sarama.ProducerMessage{
+		Topic:     p.topic,
+		Partition: part,
+		Value:     sarama.ByteEncoder(b),
+	})
+	if err != nil {
+		return fmt.Errorf("send part %d: %w", part, err)
+	}
+	p.log.Info("produced", "id", id, "partition", part, "offset", offset)
+	return nil
+}
+
 func (p *Producer) send() error {
 	if p.sync == nil {
 		if err := p.connect(); err != nil {
@@ -98,22 +115,15 @@ func (p *Producer) send() error {
 		return fmt.Errorf("partitions: %w", err)
 	}
 
+	var firstErr error
 	for _, part := range parts {
-		id := strconv.FormatInt(time.Now().UnixNano(), 10)
-		b, err := message.New(id).Encode()
-		if err != nil {
-			return err
+		if err := p.sendOne(part); err != nil {
+			p.log.Warn("probe failed", "partition", part, "err", err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
-		_, offset, err := p.sync.SendMessage(&sarama.ProducerMessage{
-			Topic:     p.topic,
-			Partition: part,
-			Value:     sarama.ByteEncoder(b),
-		})
-		if err != nil {
-			p.drop()
-			return fmt.Errorf("send part %d: %w", part, err)
-		}
-		p.log.Info("produced", "id", id, "partition", part, "offset", offset)
 	}
-	return nil
+	return firstErr
 }
