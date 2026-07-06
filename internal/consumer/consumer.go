@@ -95,7 +95,7 @@ func (h *handler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 		if err != nil {
 			h.log.Warn("bad payload", "err", err)
 		} else {
-			h.state.RecordConsume(lat)
+			h.state.RecordConsume(msg.Partition, lat)
 			h.log.Info("consumed", "partition", msg.Partition, "offset", msg.Offset, "latencyMs", lat.Milliseconds())
 		}
 		sess.MarkMessage(msg, "")
