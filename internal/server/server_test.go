@@ -29,7 +29,7 @@ func TestReady(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			st := health.New()
 			if tt.record {
-				st.RecordConsume(time.Millisecond)
+				st.RecordConsume(0, time.Millisecond)
 			}
 			s := newTestServer(st)
 
@@ -54,7 +54,7 @@ func TestHealthyAlways200(t *testing.T) {
 
 func TestStatusContentType(t *testing.T) {
 	st := health.New()
-	st.RecordConsume(5 * time.Millisecond)
+	st.RecordConsume(0, time.Millisecond)
 	s := newTestServer(st)
 
 	rec := httptest.NewRecorder()
