@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/neomat-prog/kafka-canary/internal/health"
 	"github.com/neomat-prog/kafka-canary/internal/message"
@@ -28,7 +29,7 @@ func TestProcess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &handler{
-				state: health.New(),
+				state: health.New(time.Minute),
 				log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 			}
 

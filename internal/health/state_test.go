@@ -9,7 +9,7 @@ func TestSnapshot(t *testing.T) {
 	const staleAfter = 100 * time.Millisecond
 
 	t.Run("never consumed", func(t *testing.T) {
-		got := New().Snapshot(staleAfter)
+		got := New(staleAfter).Snapshot()
 		if got.MessagesFlowing {
 			t.Errorf("flowing = true, want false before any consume")
 		}
@@ -19,9 +19,9 @@ func TestSnapshot(t *testing.T) {
 	})
 
 	t.Run("fresh consume flows", func(t *testing.T) {
-		s := New()
+		s := New(staleAfter)
 		s.RecordConsume(0, time.Millisecond)
-		got := s.Snapshot(staleAfter)
+		got := s.Snapshot()
 		if !got.MessagesFlowing {
 			t.Errorf("flowing = false, want true right after consume")
 		}
@@ -31,10 +31,10 @@ func TestSnapshot(t *testing.T) {
 	})
 
 	t.Run("stale consume stops flowing", func(t *testing.T) {
-		s := New()
+		s := New(staleAfter)
 		s.RecordConsume(0, time.Millisecond)
 		time.Sleep(2 * staleAfter)
-		if s.Snapshot(staleAfter).MessagesFlowing {
+		if s.Snapshot().MessagesFlowing {
 			t.Errorf("flowing = true, want false after staleAfter elapsed")
 		}
 	})

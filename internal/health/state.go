@@ -6,8 +6,9 @@ import (
 )
 
 type State struct {
-	mu    sync.Mutex
-	parts map[int32]partStat
+	mu         sync.Mutex
+	parts      map[int32]partStat
+	staleAfter time.Duration
 }
 
 // State hilds the minimal facts /ready and /status need: when the last
@@ -17,8 +18,8 @@ type partStat struct {
 	lastLatencyNanos  int64
 }
 
-func New() *State {
-	return &State{parts: map[int32]partStat{}}
+func New(staleAfter time.Duration) *State {
+	return &State{parts: map[int32]partStat{}, staleAfter: staleAfter}
 }
 
 func (s *State) RecordConsume(part int32, latency time.Duration) {
@@ -34,7 +35,7 @@ type Status struct {
 	Partitions      map[int32]string `json:"partitions"`
 }
 
-func (s *State) Snapshot(staleAfter time.Duration) Status {
+func (s *State) Snapshot() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := Status{MessagesFlowing: len(s.parts) > 0, Partitions: map[int32]string{}}
@@ -42,7 +43,7 @@ func (s *State) Snapshot(staleAfter time.Duration) Status {
 	for p, ps := range s.parts {
 		ago := time.Since(time.Unix(0, ps.lastConsumedNanos))
 		st.Partitions[p] = ago.Round(time.Millisecond).String()
-		if ago >= staleAfter {
+		if ago >= s.staleAfter {
 			st.MessagesFlowing = false
 			st.StalePartitions = append(st.StalePartitions, p)
 		}
