@@ -12,8 +12,7 @@ import (
 )
 
 func newTestServer(state *health.State) *Server {
-	return New(":0", state, 100*time.Millisecond,
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New(":0", state, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func TestReady(t *testing.T) {
@@ -27,7 +26,7 @@ func TestReady(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			st := health.New()
+			st := health.New(100 * time.Millisecond)
 			if tt.record {
 				st.RecordConsume(0, time.Millisecond)
 			}
@@ -44,7 +43,7 @@ func TestReady(t *testing.T) {
 }
 
 func TestHealthyAlways200(t *testing.T) {
-	s := newTestServer(health.New()) // no consume ever
+	s := newTestServer(health.New(100 * time.Millisecond)) // no consume ever
 	rec := httptest.NewRecorder()
 	s.handleHealthy(rec, httptest.NewRequest(http.MethodGet, "/healthy", nil))
 	if rec.Code != http.StatusOK {
@@ -53,7 +52,7 @@ func TestHealthyAlways200(t *testing.T) {
 }
 
 func TestStatusContentType(t *testing.T) {
-	st := health.New()
+	st := health.New(100 * time.Millisecond)
 	st.RecordConsume(0, time.Millisecond)
 	s := newTestServer(st)
 
