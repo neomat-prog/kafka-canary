@@ -12,7 +12,7 @@ import (
 )
 
 func newTestServer(state *health.State) *Server {
-	return New(":0", state, 100*time.Millisecond,
+	return Routes(":0", state, 100*time.Millisecond,
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
