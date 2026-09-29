@@ -6,7 +6,7 @@ import (
 )
 
 func TestProbeRoundTrip(t *testing.T) {
-	in := New("abc")
+	in := New("abc", 7)
 	b, err := in.Encode()
 	if err != nil {
 		t.Fatalf("encode: %v", err)
@@ -20,6 +20,9 @@ func TestProbeRoundTrip(t *testing.T) {
 	}
 	if out.ProducedAt != in.ProducedAt {
 		t.Errorf("producedAt: got %d want %d", out.ProducedAt, in.ProducedAt)
+	}
+	if out.Seq != in.Seq {
+		t.Errorf("seq: got %d want %d", out.Seq, in.Seq)
 	}
 }
 

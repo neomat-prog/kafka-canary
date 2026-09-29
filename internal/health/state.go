@@ -11,8 +11,6 @@ type State struct {
 	staleAfter time.Duration
 }
 
-// State hilds the minimal facts /ready and /status need: when the last
-// probe was consumed, and its e2e latency. Lock-free.
 type partStat struct {
 	lastConsumedNanos int64
 	lastLatencyNanos  int64
@@ -26,6 +24,18 @@ func (s *State) RecordConsume(part int32, latency time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.parts[part] = partStat{time.Now().UnixNano(), int64(latency)}
+}
+
+func (s *State) SetAssigned(parts []int32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keep := make(map[int32]partStat, len(parts))
+	for _, p := range parts {
+		if ps, ok := s.parts[p]; ok {
+			keep[p] = ps
+		}
+	}
+	s.parts = keep
 }
 
 type Status struct {
