@@ -42,11 +42,11 @@ func run(log *slog.Logger) error {
 		log.Info("mTLS enabled", "ca", cfg.CACertPath, "cert", cfg.ClientCertPath)
 	}
 
-	state := health.New()
+	state := health.New(cfg.StaleAfter)
 
 	prod := producer.New(cfg.Brokers, cfg.Topic, cfg.Interval, tlsCfg, log)
 	cons := consumer.New(cfg.Brokers, cfg.Group, cfg.Topic, tlsCfg, cfg.LatThreshold, state, log)
-	srv := server.New(cfg.Addr, state, cfg.StaleAfter, log)
+	srv := server.New(cfg.Addr, state, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(),
 		os.Interrupt, syscall.SIGTERM)

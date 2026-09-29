@@ -22,7 +22,6 @@ type Producer struct {
 	log      *slog.Logger
 	client   sarama.Client
 	sync     sarama.SyncProducer
-	seq      int64
 }
 
 func New(brokers []string, topic string, interval time.Duration, tlsCfg *tls.Config, log *slog.Logger) *Producer {
@@ -63,12 +62,14 @@ func (p *Producer) Run(ctx context.Context) error {
 	ticker := time.NewTicker(p.interval)
 	defer ticker.Stop()
 
+	var seq int64
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			if err := p.send(); err != nil {
+			seq++
+			if err := p.send(seq); err != nil {
 				p.log.Warn("produce failed", "err", err)
 			}
 		}
@@ -89,9 +90,9 @@ func (p *Producer) drop() {
 	p.sync, p.client = nil, nil
 }
 
-func (p *Producer) sendOne(part int32) error {
+func (p *Producer) sendOne(part int32, seq int64) error {
 	id := fmt.Sprintf("%d-%d", part, time.Now().UnixNano())
-	b, err := message.New(id).Encode()
+	b, err := message.New(id, seq).Encode()
 	if err != nil {
 		return err
 	}
@@ -104,12 +105,12 @@ func (p *Producer) sendOne(part int32) error {
 		return fmt.Errorf("send part %d: %w", part, err)
 	}
 
-	p.log.Info("produced", "id", id, "partition", part, "offset", offset)
+	p.log.Info("produced", "id", id, "partition", part, "offset", offset, "seq", seq)
 
 	return nil
 }
 
-func (p *Producer) send() error {
+func (p *Producer) send(seq int64) error {
 	if p.sync == nil {
 		if err := p.connect(); err != nil {
 			return fmt.Errorf("connect: %w", err)
@@ -130,7 +131,7 @@ func (p *Producer) send() error {
 
 	for _, part := range parts {
 		g.Go(func() error {
-			if err := p.sendOne(part); err != nil {
+			if err := p.sendOne(part, seq); err != nil {
 				p.log.Warn("partition probe failed", "partition", part, "err", err)
 				mu.Lock()
 				errs = append(errs, err)

@@ -82,19 +82,27 @@ type handler struct {
 	state        *health.State
 	log          *slog.Logger
 	latThreshold time.Duration
-	lastSeq      int64
 }
 
-func (h *handler) Setup(sarama.ConsumerGroupSession) error   { return nil }
+func (h *handler) Setup(sess sarama.ConsumerGroupSession) error {
+	var parts []int32
+	for _, ps := range sess.Claims() {
+		parts = append(parts, ps...)
+	}
+	h.state.SetAssigned(parts)
+	return nil
+}
+
 func (h *handler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 
 func (h *handler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	msgCh := claim.Messages()
-	for msg := range msgCh {
-		lat, err := h.process(msg.Value)
+	var lastSeq int64
+	for msg := range claim.Messages() {
+		lat, seq, err := h.process(msg.Value, lastSeq)
 		if err != nil {
 			h.log.Warn("bad payload", "err", err)
 		} else {
+			lastSeq = seq
 			h.state.RecordConsume(msg.Partition, lat)
 			h.log.Info("consumed", "partition", msg.Partition, "offset", msg.Offset, "latencyMs", lat.Milliseconds())
 		}
@@ -103,10 +111,10 @@ func (h *handler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.Co
 	return nil
 }
 
-func (h *handler) process(value []byte) (latency time.Duration, err error) {
+func (h *handler) process(value []byte, lastSeq int64) (latency time.Duration, seq int64, err error) {
 	msg, err := message.Decode(value)
 	if err != nil {
-		return 0, err
+		return 0, lastSeq, err
 	}
 	latency = msg.Latency()
 
@@ -114,10 +122,9 @@ func (h *handler) process(value []byte) (latency time.Duration, err error) {
 		h.log.Warn("latency spike", "latency", latency, "id", msg.ID)
 	}
 
-	if h.lastSeq != 0 && msg.Seq > h.lastSeq+1 {
-		h.log.Warn("probe gap", "missing", msg.Seq-h.lastSeq-1, "from", h.lastSeq)
+	if lastSeq != 0 && msg.Seq > lastSeq+1 {
+		h.log.Warn("probe gap", "missing", msg.Seq-lastSeq-1, "from", lastSeq)
 	}
-	h.lastSeq = msg.Seq
 
-	return latency, nil
+	return latency, msg.Seq, nil
 }

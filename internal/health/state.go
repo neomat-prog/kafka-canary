@@ -6,25 +6,36 @@ import (
 )
 
 type State struct {
-	mu    sync.Mutex
-	parts map[int32]partStat
+	mu         sync.Mutex
+	parts      map[int32]partStat
+	staleAfter time.Duration
 }
 
-// State hilds the minimal facts /ready and /status need: when the last
-// probe was consumed, and its e2e latency. Lock-free.
 type partStat struct {
 	lastConsumedNanos int64
 	lastLatencyNanos  int64
 }
 
-func New() *State {
-	return &State{parts: map[int32]partStat{}}
+func New(staleAfter time.Duration) *State {
+	return &State{parts: map[int32]partStat{}, staleAfter: staleAfter}
 }
 
 func (s *State) RecordConsume(part int32, latency time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.parts[part] = partStat{time.Now().UnixNano(), int64(latency)}
+}
+
+func (s *State) SetAssigned(parts []int32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keep := make(map[int32]partStat, len(parts))
+	for _, p := range parts {
+		if ps, ok := s.parts[p]; ok {
+			keep[p] = ps
+		}
+	}
+	s.parts = keep
 }
 
 type Status struct {
@@ -34,7 +45,7 @@ type Status struct {
 	Partitions      map[int32]string `json:"partitions"`
 }
 
-func (s *State) Snapshot(staleAfter time.Duration) Status {
+func (s *State) Snapshot() Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := Status{MessagesFlowing: len(s.parts) > 0, Partitions: map[int32]string{}}
@@ -42,7 +53,7 @@ func (s *State) Snapshot(staleAfter time.Duration) Status {
 	for p, ps := range s.parts {
 		ago := time.Since(time.Unix(0, ps.lastConsumedNanos))
 		st.Partitions[p] = ago.Round(time.Millisecond).String()
-		if ago >= staleAfter {
+		if ago >= s.staleAfter {
 			st.MessagesFlowing = false
 			st.StalePartitions = append(st.StalePartitions, p)
 		}
