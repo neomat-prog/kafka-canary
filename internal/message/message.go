@@ -12,8 +12,8 @@ type Probe struct {
 	ProducedAt int64  `json:"producedAt"`
 }
 
-func New(id string) Probe {
-	return Probe{ID: id, Seq: 0, ProducedAt: time.Now().UnixNano()}
+func New(id string, seq int64) Probe {
+	return Probe{ID: id, Seq: seq, ProducedAt: time.Now().UnixNano()}
 }
 
 func (p Probe) Encode() ([]byte, error) {

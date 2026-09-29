@@ -1,0 +1,64 @@
+
+openapi: 3.1.0
+info:
+  title: kafka-canary
+  version: "1.0.0"
+  description: Liveness, readiness and probe status for the Kafka canary.
+paths:
+  /healthy:
+    get:
+      summary: Liveness probe
+      description: Always 200 while the process is up.
+      responses:
+        "200":
+          description: Process alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+  /ready:
+    get:
+      summary: Readiness probe
+      description: 200 when probe messages are flowing on every partition, else 503. Empty body.
+      responses:
+        "200": { description: Messages flowing }
+        "503": { description: One or more partitions stale }
+  /status:
+    get:
+      summary: Probe status
+      description: Same health verdict as /ready, plus per-partition detail.
+      responses:
+        "200":
+          description: Messages flowing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+        "503":
+          description: One or more partitions stale
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Status" }
+components:
+  schemas:
+    Status:
+      type: object
+      required: [messagesFlowing, lastLatencyMs, partitions]
+      properties:
+        messagesFlowing:
+          type: boolean
+          description: False if no probe consumed yet, or any partition is stale.
+        lastLatencyMs:
+          type: integer
+          format: int64
+          description: Highest end-to-end produce-to-consume latency across partitions.
+        stalePartitions:
+          type: array
+          description: Partitions whose last consume is older than the stale window. Omitted when empty.
+          items: { type: integer, format: int32 }
+        partitions:
+          type: object
+          description: Partition ID to time since last consume, e.g. "1.204s".
+          additionalProperties: { type: string }
+          example: { "0": "312ms", "1": "1.204s" }

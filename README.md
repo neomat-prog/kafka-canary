@@ -117,7 +117,7 @@ by env, that works against any Kafka.
 ```bash
 go run ./cmd/canary                # local, against $CANARY_BROKERS
 docker compose up --build          # Kafka + canary together
-kubectl apply -f k8s/canary.yaml   # on Kubernetes (set CANARY_BROKERS first)
+kubectl apply -f k8s/canary_example.yaml   # on Kubernetes (set CANARY_BROKERS first)
 ```
 
 ## License
