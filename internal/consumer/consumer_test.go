@@ -5,9 +5,11 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/neomat-prog/kafka-canary/internal/health"
 	"github.com/neomat-prog/kafka-canary/internal/message"
 )
@@ -123,5 +125,53 @@ func TestProcessLatencySpikeLogged(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "latency spike") {
 		t.Errorf("no latency spike logged above threshold\nlogs: %s", buf.String())
+	}
+}
+
+type fakeSession struct{ sarama.ConsumerGroupSession }
+
+func (fakeSession) MarkMessage(*sarama.ConsumerMessage, string) {}
+
+type fakeClaim struct {
+	sarama.ConsumerGroupClaim
+	ch chan *sarama.ConsumerMessage
+}
+
+func (c fakeClaim) Messages() <-chan *sarama.ConsumerMessage { return c.ch }
+
+type lockedWriter struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.Write(p)
+}
+
+// Sarama runs one ConsumeClaim goroutine per partition on a shared handler;
+// gap tracking must stay per-partition. Run with -race.
+func TestConsumeClaimConcurrentPartitions(t *testing.T) {
+	var out lockedWriter
+	h := newHandler(&out)
+
+	var wg sync.WaitGroup
+	for p := int32(0); p < 8; p++ {
+		ch := make(chan *sarama.ConsumerMessage, 100)
+		for s := int64(1); s <= 100; s++ {
+			ch <- &sarama.ConsumerMessage{Partition: p, Offset: s, Value: encode(t, "probe", s)}
+		}
+		close(ch)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			h.ConsumeClaim(fakeSession{}, fakeClaim{ch: ch})
+		}()
+	}
+	wg.Wait()
+
+	if strings.Contains(out.buf.String(), "probe gap") {
+		t.Fatalf("false gap: lastSeq shared across partitions\nlogs: %s", out.buf.String())
 	}
 }
