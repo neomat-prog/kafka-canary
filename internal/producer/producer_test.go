@@ -21,7 +21,7 @@ type fakeClient struct {
 }
 
 func (c *fakeClient) Partitions(string) ([]int32, error) { return c.parts, c.err }
-func (c *fakeClient) Close() error                        { c.closed = true; return nil }
+func (c *fakeClient) Close() error                       { c.closed = true; return nil }
 
 // fakeSync records sent messages; send fans out per partition, so it must be goroutine-safe.
 type fakeSync struct {
