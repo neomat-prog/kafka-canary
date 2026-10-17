@@ -12,7 +12,7 @@ import (
 )
 
 // i believe the stress test should not obey consuming?
-type Opts struct {
+type Stress struct {
 	Rate        int `json:"rate"`
 	SizeBytes   int `json:"sizeBytes"`
 	DurationSec int `json:"durationSec"`
@@ -24,11 +24,11 @@ const (
 	maxDurationSec = 60
 )
 
-func (o Opts) Clamp() Opts {
-	o.Rate = min(max(o.Rate, 100), maxRate)
-	o.SizeBytes = min(max(o.SizeBytes, 1), maxSizeBytes)
-	o.DurationSec = min(max(o.DurationSec, 1), maxDurationSec)
-	return o
+func (s Stress) Clamp() Stress {
+	s.Rate = min(max(s.Rate, 100), maxRate)
+	s.SizeBytes = min(max(s.SizeBytes, 1), maxSizeBytes)
+	s.DurationSec = min(max(s.DurationSec, 1), maxDurationSec)
+	return s
 }
 
 // Runner is produce-only load
@@ -49,18 +49,18 @@ func New(brokers []string, topic string, tlsCfg *tls.Config, log *slog.Logger) *
 	}
 }
 
-func (r *Runner) Start(ctx context.Context, o Opts) bool {
+func (r *Runner) Start(ctx context.Context, s Stress) bool {
 	if !r.running.CompareAndSwap(false, true) {
 		return false
 	}
 	go func() {
 		defer r.running.Store(false)
-		r.run(ctx, o)
+		r.run(ctx, s)
 	}()
 	return true
 }
 
-func (r *Runner) run(ctx context.Context, o Opts) {
+func (r *Runner) run(ctx context.Context, s Stress) {
 	cfg := sarama.NewConfig()
 	cfg.Producer.Return.Successes = true
 	if r.tls != nil {
@@ -87,10 +87,10 @@ func (r *Runner) run(ctx context.Context, o Opts) {
 		}
 	})
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(o.DurationSec)*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.DurationSec)*time.Second)
 	defer cancel()
-	payload := sarama.ByteEncoder(make([]byte, o.SizeBytes))
-	r.log.Info("stress started", "topic", r.topic, "rate", o.Rate, "sizeBytes", o.SizeBytes, "durationSec", o.DurationSec)
+	payload := sarama.ByteEncoder(make([]byte, s.SizeBytes))
+	r.log.Info("stress started", "topic", r.topic, "rate", s.Rate, "sizeBytes", s.SizeBytes, "durationSec", s.DurationSec)
 	start := time.Now()
 	t := time.NewTicker(10 * time.Millisecond)
 	defer t.Stop()
@@ -100,7 +100,7 @@ loop:
 		case <-ctx.Done():
 			break loop
 		case <-t.C:
-			for range o.Rate / 100 {
+			for range s.Rate / 100 {
 				select {
 				case ap.Input() <- &sarama.ProducerMessage{Topic: r.topic, Value: payload}:
 				case <-ctx.Done(): // broker backpressure must not stretch the run past its duration

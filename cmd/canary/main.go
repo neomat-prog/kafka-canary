@@ -46,7 +46,7 @@ func run(log *slog.Logger) error {
 
 	prod := producer.New(cfg.Brokers, cfg.Topic, cfg.Interval, tlsCfg, log)
 	cons := consumer.New(cfg.Brokers, cfg.Group, cfg.Topic, tlsCfg, cfg.LatThreshold, state, log)
-	srv := server.New(cfg.Addr, state, log)
+	srv := server.New(cfg.Addr, state, nil, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(),
 		os.Interrupt, syscall.SIGTERM)

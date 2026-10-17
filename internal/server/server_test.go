@@ -13,7 +13,7 @@ import (
 )
 
 func newTestServer(state *health.State) *Server {
-	return New(":0", state, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	return New(":0", state, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
 func TestReady(t *testing.T) {
