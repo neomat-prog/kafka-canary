@@ -14,6 +14,7 @@ import (
 	"github.com/neomat-prog/kafka-canary/internal/health"
 	"github.com/neomat-prog/kafka-canary/internal/producer"
 	"github.com/neomat-prog/kafka-canary/internal/server"
+	"github.com/neomat-prog/kafka-canary/internal/stress"
 )
 
 func main() {
@@ -42,11 +43,13 @@ func run(log *slog.Logger) error {
 		log.Info("mTLS enabled", "ca", cfg.CACertPath, "cert", cfg.ClientCertPath)
 	}
 
+	st := stress.New(cfg.Brokers, cfg.Topic+"_stress", tlsCfg, log)
+
 	state := health.New(cfg.StaleAfter)
 
 	prod := producer.New(cfg.Brokers, cfg.Topic, cfg.Interval, tlsCfg, log)
 	cons := consumer.New(cfg.Brokers, cfg.Group, cfg.Topic, tlsCfg, cfg.LatThreshold, state, log)
-	srv := server.New(cfg.Addr, state, nil, log)
+	srv := server.New(cfg.Addr, state, st, log)
 
 	ctx, stop := signal.NotifyContext(context.Background(),
 		os.Interrupt, syscall.SIGTERM)
